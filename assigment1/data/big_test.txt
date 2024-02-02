@@ -1,0 +1,11 @@
+agency
+cometa
+depository
+elicottero
+ipermercato
+lago
+market
+museo
+palazzo
+residenza
+villaggio
