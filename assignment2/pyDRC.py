@@ -16,49 +16,12 @@ from matplotlib import pyplot as plt
 from io_ import extract_zip_from_url, move_content_one_level_up
 from settings import DEFAULT_PARAMETER_PATH
 
-class DRCDownloader:
-
-    def __init__(self, path_: str, url: str):
-
-        self._path: str = path_
-        self._url: str = url
-
-    def __str__(self) -> str:
-        return f"DRCDownloader[path: {self.path}; url: {self.url}; {'' if self.is_downloaded else 'not'} downloaded]"
-
-    def __repr__(self) -> str:
-        return str(self)
-
-    @property
-    def path(self) -> str:
-        return self._path
-
-    @property
-    def url(self) -> str:
-        return self._url
-
-    @property
-    def is_downloaded(self):
-        return os.path.exists(self.path)
-
-    def download(self, overwrite: bool = False):
-
-        if not self.is_downloaded or overwrite:
-
-            # Create the target directory if it doesn't exist
-            os.makedirs(self.path, exist_ok=True)
-
-            # Call the function to extract the ZIP file
-            extract_zip_from_url(url=self.url, target_dir=self.path)
-
-            # Move content to power directory
-            move_content_one_level_up(base_path=self.path)
-
-            return
-
-        print(f"File already downloaded at {self.path}")
+# --- ENUM ---
 
 class Named(Enum):
+    """
+    Enumeration representing named results.
+    """
 
     Correct = "NAMED CORRECT"
     Wrong = "NAMED WRONG"
@@ -70,6 +33,7 @@ class Named(Enum):
 
         :return: string representation of the named result.
         """
+
         return self.value
 
     def __repr__(self) -> str:
@@ -78,16 +42,23 @@ class Named(Enum):
 
         :return: string representation.
         """
+
         return str(self)
 
     def to_color(self) -> str:
+        """
+        Return the color associated with the named result.
 
-        if self == Named.Correct:
-            return "green"
-        elif self == Named.Wrong:
-            return "red"
-        else:
-            return "black"
+        :return: Color string associated with the named result.
+        """
+
+        colors = {
+            Named.Correct: "green",
+            Named.Wrong:   "red",
+            Named.Lowac:   "black"
+        }
+
+        return colors[self]
 
 class Parameter(Enum):
     """
@@ -153,15 +124,30 @@ class Parameter(Enum):
         return str(self)
 
     def set_default_parameter_path(self, new_path: str) -> None:
+        """
+        Set a new default path for parameter files.
+
+        :param new_path: The new default path for parameter files.
+        """
         self.DEFAULT_PARAMETER_PATH = new_path
 
     @property
     def default(self) -> float:
+        """
+        Get the default value for the parameter.
+
+        :return: The default value for the parameter.
+        """
         return self.get_parameter_file_settings()[self]
 
     @staticmethod
     def get_parameter_file_settings(parameter_file: str | None = None) -> Dict[Parameter, float]:
+        """
+        Get the parameter settings from a parameter file.
 
+        :param parameter_file: Path to the parameter file. If None, uses the default path.
+        :return: Dictionary containing parameter settings.
+        """
         if parameter_file is None:
             parameter_file = DEFAULT_PARAMETER_PATH
 
@@ -176,30 +162,478 @@ class Parameter(Enum):
 
         return params
 
+# --- RESULTS ---
+
+@dataclass
+class Result:
+    """
+    Class representing the result of a DRC simulation.
+    """
+
+    word: str
+    pronounce: str
+    cycles: int
+    named: Named
+
+    def __str__(self):
+        """
+        Return a human-readable string representation of the result.
+
+        :return: string representation of the result.
+        """
+
+        return f"[{self.word}: {self.pronounce} - {self.named}; cycles: {self.cycles}]"
+
+    def __repr__(self):
+        """
+        Return the string representation format.
+
+        :return: string representation.
+        """
+        return str(self)
+
+    @staticmethod
+    def parse_results_line(result_line: str) -> Result:
+        """
+        Parse a line of results and create a Result instance.
+
+        :param result_line: A line containing result information.
+        :return: A Result instance.
+        """
+
+        result_data = result_line.split()
+
+        # Cope with the case in which a space is given as pronunciation
+        if result_line[len(result_data[0])+1] == " ":
+
+            word, cycles, named = tuple(result_data[:2] + [" ".join(result_data[2:])])
+            pronounce = " "
+
+        else:
+            # Create a tuple with the desired information
+            word, pronounce, cycles, named = tuple(result_data[:3] + [" ".join(result_data[3:])])
+
+        return Result(
+            word=word,
+            pronounce=pronounce,
+            cycles=int(cycles),
+            named=Named(named)
+        )
+
+
+class ResultSet:
+    """
+    Class representing a set of results for different words with the same parameters from DRC simulations.
+    """
+
+    def __init__(self, results: List[Result]):
+        """
+        Initialize a ResultSet instance with a list of Result instances.
+
+        :param results: List of Result instances.
+        """
+
+        self._results: Dict[str, Result] = {r.word: r for r in results}
+
+    def __str__(self) -> str:
+        """
+        Return a human-readable string representation of the result set.
+
+        :return: String representation of the result set.
+        """
+
+        return f"ResultSet[{len(self)} results]"
+
+    def __repr__(self):
+        """
+        Return the string representation format.
+
+        :return: String representation.
+        """
+
+        return str(self)
+
+    def __len__(self) -> int:
+        """
+        Return the number of results in the set.
+
+        :return: Number of results.
+        """
+
+        return len(self._results)
+
+    def __iter__(self) -> Iterable[Result]:
+        """
+        Iterate over the results in the set.
+
+        :return: Iterator over Result instances.
+        """
+
+        return iter(self._results.values())
+
+    def __getitem__(self, word: str) -> Result:
+        """
+        Get a result by word.
+
+        :param word: Word to retrieve the result for.
+
+        :return: Result instance.
+        """
+
+        return self._results[word]
+
+    @property
+    def avg_cycle(self) -> int:
+        """
+        Calculate the average cycle among all results.
+
+        :return: Average cycle.
+        """
+
+        return int(mean([r.cycles for r in self]))
+
+    @staticmethod
+    def plot_cycles_comparison(results: List[ResultSet], legends: List[str],
+                               title: str = "Cycles comparison", yrange=None, ax=None):
+        """
+        Plot a comparison of cycles for different result sets.
+
+        :param results: List of ResultSet instances to compare.
+        :param legends: List of legends for each result set.
+        :param title: Title of the plot.
+        :param yrange: Optional y-axis range.
+        :param ax: Optional axes for the plot.
+        """
+
+        # Colors for each ResultSet
+        COLS = ['blue', 'orange', 'green', 'purple']  # add more
+
+        if len(results) > len(COLS):
+            raise Exception(f"Result list exceeding maximum number {len(COLS)}")
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        lines = []
+
+        # Plot each ResultSet
+        for result, col in zip(results, COLS[:(len(results))]):
+
+            # Plot the two types of Named
+            for marker, named in [('o', Named.Correct), ('x', Named.Wrong)]:
+                i_cycle = [(i, r.cycles) for i, r in enumerate(result) if r.named == named]
+
+                line = ax.scatter(
+                    [i for i, _ in i_cycle],
+                    [cycle for _, cycle in i_cycle],
+                    marker=marker, color=col
+                )
+                lines.append(line)
+
+                ax.axhline(y=result.avg_cycle, color=col, linestyle='--')
+
+        # Set yrange from input
+        if yrange is not None:
+            low, high = yrange
+            ax.set_ylim(low, high)
+
+        # Graph settings
+        ax.set_xlabel('Word index')
+        ax.set_ylabel('Cycles')
+        ax.set_title(title)
+
+        max_range = max([len(r) for r in results])
+        ax.set_xticks(range(1, max_range + 1, 4))
+        ax.grid(True)
+
+        # Add legend for markers
+        for legend, color in zip(legends, COLS[:len(legends)]):
+            ax.scatter([], [], marker='o', color=color, label=legend)
+        ax.scatter([], [], marker='o', color='black', label=str(Named.Correct))
+        ax.scatter([], [], marker='x', color='black', label=str(Named.Wrong))
+        ax.plot([], linestyle='--', color='black', label='Average')
+        ax.legend(loc='upper left', prop={"size": 6})
+
+
+class Results:
+    """
+    Class representing a set of results for the same words varying a specific parameter from DRC simulations.
+    """
+
+    def __init__(self, results: Dict[float, Result], param: Parameter):
+        """
+        Initialize a Results instance with a dictionary of results and a parameter.
+
+        :param results: Dictionary of results with parameter values as keys.
+        :param param: Parameter associated with the results.
+        """
+
+        self._results = results
+        self._param = param
+
+    def __str__(self) -> str:
+        """
+        Return a human-readable string representation of the result.
+
+        :return: string representation of the result.
+        """
+
+        param_values = list(self.results.keys())
+
+        return f"Results[{self.word} - {self.param}: {{from: {param_values[0]}, to: {param_values[-1]}, step: {len(self)}}}]"
+
+    def __repr__(self) -> str:
+        """
+        Return the string representation format.
+
+        :return: string representation.
+        """
+
+        return str(self)
+
+    def __len__(self) -> int:
+        """
+        Return the considered number of results.
+
+        :return: number of results.
+        """
+
+        return len(self.results)
+
+    def __getitem__(self, value) -> Result:
+        """
+        Get a result by parameter value.
+
+        :param value: Parameter value to retrieve the result for.
+
+        :return: Result instance.
+        """
+
+        return self.results[value]
+
+    @property
+    def results(self) -> Dict[float, Result]:
+        """
+        Get the dictionary of results.
+
+        :return: Dictionary of results.
+        """
+
+        return self._results
+
+    @property
+    def param(self) -> Parameter:
+        """
+        Get the varying parameter in the model.
+
+        :return: Model varying parameter.
+        """
+
+        return self._param
+
+    @property
+    def word(self) -> str:
+        """
+        Get the word associated with the results.
+
+        :return: Model word.
+        """
+
+        return list(self.results.values())[0].word
+
+    def plot_cycles(self):
+        """
+        Plot the trend parameter-cycle for the model,
+         with the additional information of pronounce and result for each point
+        """
+
+        import matplotlib.pyplot as plt
+
+        # Data
+        x          = list(self.results.keys())
+        y          = [v.cycles            for v in self.results.values()]
+        colors     = [v.named.to_color() for v in self.results.values()]
+        pronounces = [v.pronounce         for v in self.results.values()]
+
+        # Create a scatter plot for each label and color
+        plt.scatter(x, y, c=colors, marker='.')
+
+        # Connect the points with lines
+
+        for x_, y_, color, pronounce in zip(x, y, colors, pronounces):
+            plt.text(
+                x_, y_, pronounce, fontsize=8, color='black', ha='left', va='bottom'
+            )
+
+        plt.plot(x, y, color='gray', linestyle='-', linewidth=1)
+
+        # Add labels to the axes
+        plt.xlabel(f'{self.param}')
+        plt.ylabel('Cycles')
+
+        # Add a title to the plot
+        plt.title(f'{self.word} cycles varying {self.param}')
+
+        # Legend
+        legend_dict = {named.to_color(): str(named) for named in [Named.Correct, Named.Wrong, Named.Lowac]}
+
+        custom_handles = [
+            plt.Line2D([0], [0], marker='.', color='w', markerfacecolor=color, markersize=10)
+            for color in legend_dict.keys()
+        ]
+
+        custom_labels = list(legend_dict.values())
+
+        plt.legend(
+            handles=custom_handles,
+            labels=custom_labels,
+            prop={"size": 6}
+        )
+
+        # Plot
+        plt.show()
+
+### --- DRC ---
+
+class DRCDownloader:
+    """
+    Class for downloading the DRC software.
+    """
+
+    def __init__(self, path_: str, url: str):
+        """
+        Initialize a DRCDownloader instance with a local path and a download URL.
+
+        :param path_: Local path where the downloaded files will be stored.
+        :param url: URL from which to download the files.
+        """
+
+        self._path: str = path_
+        self._url: str = url
+
+    def __str__(self) -> str:
+        """
+        Return a human-readable string representation of the downloader.
+
+        :return: String representation of the downloader.
+        """
+
+        return f"DRCDownloader[path: {self.path}; url: {self.url}; {'' if self.is_downloaded else 'not'} downloaded]"
+
+    def __repr__(self) -> str:
+        """
+        Return the string representation format.
+
+        :return: String representation.
+        """
+
+        return str(self)
+
+    @property
+    def path(self) -> str:
+        """
+        Get the local path where files are stored.
+
+        :return: Local path.
+        """
+
+        return self._path
+
+    @property
+    def url(self) -> str:
+        """
+        Get the download URL.
+
+        :return: Download URL.
+        """
+
+        return self._url
+
+    @property
+    def is_downloaded(self) -> bool:
+        """
+        Check if the files are already downloaded.
+
+        :return: True if files are downloaded, False otherwise.
+        """
+
+        return os.path.exists(self.path)
+
+    def download(self, overwrite: bool = False):
+        """
+        Download files from the specified URL to the local path.
+
+        :param overwrite: If True, overwrite existing files. Default is False.
+        """
+
+        if not self.is_downloaded or overwrite:
+
+            # Create the target directory if it doesn't exist
+            os.makedirs(self.path, exist_ok=True)
+
+            # Call the function to extract the ZIP file
+            extract_zip_from_url(url=self.url, target_dir=self.path)
+
+            # Move content to power directory
+            move_content_one_level_up(base_path=self.path)
+
+            return
+
+        print(f"File already downloaded at {self.path}")
 
 class DRCNetwork:
-
+    """
+    Class for managing DRC network configurations and run.
+    """
     def __init__(self, dir_: str, binary: str):
+        """
+        Initialize a DRCNetwork instance with a directory and binary name.
+
+        :param dir_: Directory where network software is stored.
+        :param binary: Name of the associated DRC binary executable.
+        """
 
         self._dir = dir_
         self._binary_name = binary
 
     def __str__(self) -> str:
+        """
+        Return a human-readable string representation of the network.
+
+        :return: String representation of the network.
+        """
         return f"DRCNetwork[{os.path.join(self.dir_, self.binary)}]"
 
     def __repr__(self) -> str:
+        """
+        Return the string representation format.
+
+        :return: String representation.
+        """
         return str(self)
 
     @property
     def dir_(self) -> str:
+        """
+        Get the directory where network software are stored.
+
+        :return: Directory path.
+        """
         return self._dir
 
     @property
     def binary(self) -> str:
+        """
+        Get the name of the associated DRC binary executable.
+
+        :return: Binary name.
+        """
         return self._binary_name
 
     def clear(self):
-
+        """
+        Remove all DRC run histories from the directory.
+        """
         # Get a list of all items in the folder
         items = os.listdir(self.dir_)
 
@@ -215,9 +649,24 @@ class DRCNetwork:
 
 
     def run(
-        self, word: str, parameters: List[Tuple[Parameter, float | tuple]] | str | None = None,
+        self, word: str, parameters: List[Tuple[Parameter, float | Tuple[float, float, int]]] | str | None = None,
         files: bool = False, store_activations: bool = False, log: bool = False
     ) -> Result | ResultSet | Results | Tuple[Result, Activations] | Tuple[ResultSet, Activations] | Tuple[Results, Activations]:
+        """
+        Run the DRC program with the specified word and parameters.
+
+        :param word: Word for simulation or TXT file containing a set of words.
+        :param parameters: String indicating the parameter configuration file or
+            list of tuples specifying parameters in format
+            - (Parameter, Value) for changing the parameter;
+            - (Parameter, (Start, End, Step) to perform step parameter simulations;
+            Default is None indicating to use default parameters.
+        :param files: Flag to indicate whether to include files in the output. Default is False.
+        :param store_activations: Flag to indicate whether to store activations. Default is False.
+        :param log: Flag to indicate whether to log the output. Default is False.
+
+        :return: result or optionally a tuple containing activations.
+        """
 
         # We need to change working directory to drc program
         # We save old one, and we reset it at the end of the process
@@ -362,255 +811,89 @@ class DRCNetwork:
             os.chdir(work_dir)
 
 
-@dataclass
-class Result:
-
-    word: str
-    pronounce: str
-    cycles: int
-    named: Named
-
-    def __str__(self):
-        """
-        Return a human-readable string representation of the result.
-
-        :return: string representation of the result.
-        """
-
-        return f"[{self.word}: {self.pronounce} - {self.named}; cycles: {self.cycles}]"
-
-    def __repr__(self):
-        """
-        Return the string representation format.
-
-        :return: string representation.
-        """
-        return str(self)
-
-    @staticmethod
-    def parse_results_line(result_line: str) -> Result:
-
-        result_data = result_line.split()
-
-        # Cope with the case in which a space is given as pronunciation
-        if result_line[len(result_data[0])+1] == " ":
-
-            word, cycles, named = tuple(result_data[:2] + [" ".join(result_data[2:])])
-            pronounce = " "
-
-        else:
-            # Create a tuple with the desired information
-            word, pronounce, cycles, named = tuple(result_data[:3] + [" ".join(result_data[3:])])
-
-        return Result(
-            word=word,
-            pronounce=pronounce,
-            cycles=int(cycles),
-            named=Named(named)
-        )
-
-class ResultSet:
-
-    def __init__(self, results: List[Result]):
-
-        self._result: Dict[str, Result] = {r.word: r for r in results}
-
-    def __str__(self) -> str:
-        return f"ResultSet[{len(self)} results]"
-
-    def __repr__(self):
-        return str(self)
-
-    def __len__(self) -> int:
-        return len(self._result)
-
-    def __iter__(self):
-        return iter(self._result.values())
-
-    def __getitem__(self, word: str) -> Result:
-        return self._result[word]
-
-    @property
-    def avg_cycle(self) -> int:
-        return int(mean([r.cycles for r in self]))
-
-    @staticmethod
-    def plot_cycles_comparison(results: List[ResultSet], legends: List[str],
-                               title: str = "Cycles comparison", yrange=None, ax=None):
-
-        COLS = ['blue', 'orange', 'green', 'purple']  # add more
-
-        if len(results) > len(COLS):
-            raise Exception(f"Result list exceeding maximum number {len(COLS)}")
-
-        if ax is None:
-            fig, ax = plt.subplots()
-
-        lines = []
-
-        for result, col in zip(results, COLS[:(len(results))]):
-
-            for marker, named in [('o', Named.Correct), ('x', Named.Wrong)]:
-                i_cycle = [(i, r.cycles) for i, r in enumerate(result) if r.named == named]
-
-                line = ax.scatter(
-                    [i for i, _ in i_cycle],
-                    [cycle for _, cycle in i_cycle],
-                    marker=marker, color=col
-                )
-                lines.append(line)
-
-                ax.axhline(y=result.avg_cycle, color=col, linestyle='--')
-
-        if yrange is not None:
-            low, high = yrange
-            ax.set_ylim(low, high)
-
-        ax.set_xlabel('Word index')
-        ax.set_ylabel('Cycles')
-        ax.set_title(title)
-
-        max_range = max([len(r) for r in results])
-        ax.set_xticks(range(1, max_range + 1, 4))
-        ax.grid(True)
-
-        # Add legend for markers
-        for legend, color in zip(legends, COLS[:len(legends)]):
-            ax.scatter([], [], marker='o', color=color, label=legend)
-        ax.scatter([], [], marker='o', color='black', label=str(Named.Correct))
-        ax.scatter([], [], marker='x', color='black', label=str(Named.Wrong))
-        ax.plot([], linestyle='--', color='black', label='Average')
-        ax.legend(loc='upper left', prop={"size": 6})
-
-class Results:
-
-    def __init__(self, results: Dict[float, Result], param: Parameter):
-
-        self._results = results
-        self._param = param
-
-    def __str__(self) -> str:
-        """
-        Return a human-readable string representation of the result.
-
-        :return: string representation of the result.
-        """
-
-        param_values = list(self.results.keys())
-
-        return f"Results[{self.word} - {self.param}: {{from: {param_values[0]}, to: {param_values[-1]}, step: {len(self)}}}]"
-
-    def __repr__(self) -> str:
-        """
-        Return the string representation format.
-
-        :return: string representation.
-        """
-        return str(self)
-
-    def __len__(self) -> int:
-        """
-        Return the considered number of results.
-
-        :return: number of results.
-        """
-        return len(self.results)
-
-    def __getitem__(self, value) -> Result:
-        return self.results[value]
-
-    @property
-    def results(self) -> Dict[float, Result]:
-        return self._results
-
-    @property
-    def param(self) -> Parameter:
-        return self._param
-
-    @property
-    def word(self) -> str:
-        return list(self.results.values())[0].word
-
-    def plot_cycles(self):
-        import matplotlib.pyplot as plt
-
-        # Data
-        x          = list(self.results.keys())
-        y          = [v.cycles            for v in self.results.values()]
-        colors     = [v.named.to_color() for v in self.results.values()]
-        pronounces = [v.pronounce         for v in self.results.values()]
-
-        # Create a scatter plot for each label and color
-        plt.scatter(x, y, c=colors, marker='.')
-
-        # Connect the points with lines
-
-        for x_, y_, color, pronounce in zip(x, y, colors, pronounces):
-            plt.text(
-                x_, y_, pronounce, fontsize=8, color='black', ha='left', va='bottom'
-            )
-
-        plt.plot(x, y, color='gray', linestyle='-', linewidth=1)
-
-        # Add labels to the axes
-        plt.xlabel(f'{self.param}')
-        plt.ylabel('Cycles')
-
-        # Add a title to the plot
-        plt.title(f'{self.word} cycles varying {self.param}')
-
-        # Legend
-        legend_dict = {named.to_color(): str(named) for named in [Named.Correct, Named.Wrong, Named.Lowac]}
-
-        custom_handles = [
-            plt.Line2D([0], [0], marker='.', color='w', markerfacecolor=color, markersize=10)
-            for color in legend_dict.keys()
-        ]
-
-        custom_labels = list(legend_dict.values())
-
-        plt.legend(
-            handles=custom_handles,
-            labels=custom_labels,
-            prop={"size": 6}
-        )
-
-        # Plot
-        plt.show()
-
-
 class Activations:
+    """
+    Class for managing and visualizing DRC activations.
+    """
 
     def __init__(self, activation_dir: str):
+        """
+        Initialize an Activations instance with an activation directory.
+
+        :param activation_dir: Directory where activation files are stored.
+        """
 
         self._dir: str = activation_dir
 
     def __str__(self) -> str:
+        """
+        Return the string representation format.
+
+        :return: String representation.
+        """
 
         return f"Activations[{self.dir_} - {len(self)} file{'s' if len(self)>1 else ''}]"
 
     def __repr__(self) -> str:
+        """
+        Get the number of activation files.
+
+        :return: Number of activation files.
+        """
+
         return str(self)
 
     def __len__(self) -> int:
+        """
+        Get the number of activation files.
+
+        :return: Number of activation files.
+        """
+
         return len(self.file_names)
 
     def __iter__(self) -> Iterable[str]:
+        """
+        Iterate over the activation file names.
+
+        :return: Iterator over activation file names.
+        """
+
         return iter(self.file_names)
 
     @property
     def dir_(self) -> str:
+        """
+        Get the activation directory.
+
+        :return: Activation directory path.
+        """
+
         return self._dir
 
     @property
     def file_names(self) -> List[str]:
+        """
+        Get a list of activation file names in the directory.
+
+        :return: List of activation file names.
+        """
+
         return [file_ for file_ in os.listdir(self.dir_) if file_.endswith(".acts")]
 
     @staticmethod
     def _parse_file(activation_file: str) -> Dict[str, List[float]]:
+        """
+        Parse the contents of an activation file.
+
+        :param activation_file: Path to the activation file.
+        :return: Dictionary containing activation data.
+        """
 
         def extract_float(line_: str) -> float:
-
+            """
+            Extract the float token from a line
+            """
             for token in line_.split():
                 try:
                     float_token = float(token)
@@ -618,6 +901,7 @@ class Activations:
                 except ValueError:
                     pass
 
+        # Activation types
         activations = {
             "TL": [],
             "TGPC": [],
@@ -655,12 +939,25 @@ class Activations:
         return activations
 
     def get_data(self, file_name: str) -> Dict[str, List[float]]:
+        """
+        Get activation data from a specific file.
+
+        :param file_name: Name of the activation file.
+        :return: Dictionary containing activation data.
+        """
 
         activation_file = path.join(self.dir_, file_name)
 
         return self._parse_file(activation_file=activation_file)
 
     def plot(self, file_name: str, main: str | None = None,  ax=None):
+        """
+        Plot activation data from a specific file.
+
+        :param file_name: Name of the activation file.
+        :param main: Main title for the plot. Default is None.
+        :param ax: Matplotlib axis for the plot. Default is None.
+        """
 
         if ax is None:
             _, ax = plt.subplots()
@@ -675,8 +972,15 @@ class Activations:
         ax.legend(prop={"size": 6})
 
     def plot_multiple(self, nrows: int = 2, figsize: Tuple[int, int] = (15, 12), order: List[int] | None = None):
+        """
+        Plot activations from multiple files in a grid layout.
 
-        ncols = math.ceil(len(self) / (nrows))
+        :param nrows: Number of rows in the grid. Default is 2.
+        :param figsize: Size of the entire figure. Default is (15, 12).
+        :param order: Order in which to plot activation files. Default is None.
+        """
+
+        ncols = math.ceil(len(self) / nrows)
 
         fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
 
