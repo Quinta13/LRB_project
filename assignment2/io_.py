@@ -1,16 +1,19 @@
 import os
 import shutil
 from io import BytesIO
-from typing import List
+from typing import List, Optional
 from zipfile import ZipFile
-from numpy import mean
+
 import requests
-import matplotlib.pyplot as plt
-from model import Result
-from typing import Dict
 
 
 def extract_zip_from_url(url: str, target_dir: str):
+    """
+    Download a ZIP file from a given URL and extract its contents to a specified directory.
+
+    :param url: The URL of the ZIP file to download.
+    :param target_dir: The directory where the contents of the ZIP file will be extracted.
+    """
 
     # Make a GET request to the URL
     response = requests.get(url)
@@ -24,10 +27,14 @@ def extract_zip_from_url(url: str, target_dir: str):
         print(f"Successfully extracted contents to {target_dir}")
 
     else:
-
         print(f"Failed to download ZIP file. Status code: {response.status_code}")
 
 def move_content_one_level_up(base_path: str):
+    """
+    Move the contents of a subdirectory one level up, effectively merging the subdirectory with its parent.
+
+    :param base_path: The base path containing the subdirectory to be flattened.
+    """
 
     # List all directories inside the base path
     subdirectories = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
@@ -49,8 +56,17 @@ def move_content_one_level_up(base_path: str):
     else:
         print("Error: Unexpected directory structure.")
 
-def read_txt_file(file_path):
+def read_txt_file(file_path: str) -> Optional[List[str]]:
+    """
+    Read the contents of a text file and return a list of lines.
+
+    :param file_path: The path to the text file.
+    :return: A list of strings representing the lines in the text file.
+             Returns None if the file is not found or an error occurs during reading.
+    """
+
     try:
+        # Read content
         with open(file_path, 'r') as file:
             lines = [line.rstrip('\n') for line in file.readlines()]
             return lines
@@ -63,82 +79,48 @@ def read_txt_file(file_path):
         print(f"An error occurred: {e}")
         return None
 
-class DRCDownloader:
+def write_txt_file(file_path: str, content: str):
+    """
+    Write the given content to a text file.
 
-    def __init__(self, path_: str, url: str):
+    :param file_path: The path to the text file.
+    :param content: The content to be written to the file.
+    """
 
-        self._path: str = path_
-        self._url: str = url
+    try:
+        # Write content
+        with open(file_path, 'w') as file:
+            file.write(content)
+        print(f"Content successfully written to {file_path}")
 
-    def __str__(self) -> str:
-        return f"DRCDownloader[path: {self.path}; url: {self.url}; {'' if self.is_downloaded else 'not'} downloaded]"
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-    def __repr__(self) -> str:
-        return str(self)
+def words_to_txt_file(words: List[str], file_path: str):
+    """
+    Write a string of words to a text file, with each word on a new line.
 
-    @property
-    def path(self) -> str:
-        return self._path
+    :param words: The string containing words to be written to the file.
+    :param file_path: The path to the text file where the words will be written.
+    """
 
-    @property
-    def url(self) -> str:
-        return self._url
+    words_content = "".join([f"{word}\n" for word in words])
+    write_txt_file(file_path=file_path, content=words_content)
 
-    @property
-    def is_downloaded(self):
-        return os.path.exists(self.path)
-
-    def download(self, overwrite: bool = False):
-
-        if not self.is_downloaded or overwrite:
-
-            # Create the target directory if it doesn't exist
-            os.makedirs(self.path, exist_ok=True)
-
-            # Call the function to extract the ZIP file
-            extract_zip_from_url(url=self.url, target_dir=self.path)
-
-            # Move content to power directory
-            move_content_one_level_up(base_path=self.path)
-
-            return
-
-        print(f"File already downloaded at {self.path}")
-
-
-def plot_cycles_comparison(results_a: Dict[str, Result], results_b: Dict[str, Result],
-                           legend_a: str = "A", legend_b: str = "B", title: str = "Cycles comparison",
-                           yrange=None, ax=None):
-    cycles_a = [result.cycles for _, result in results_a.items()]
-    cycles_b = [result.cycles for _, result in results_b.items()]
-
-    if ax is None:
-        fig, ax = plt.subplots()
-
-    ax.plot(range(len(cycles_a)), cycles_a, marker='o', color="blue",   label=legend_a)
-    ax.plot(range(len(cycles_b)), cycles_b, marker='o', color="orange", label=legend_b)
-
-    ax.axhline(y=mean(cycles_a), color="blue", linestyle='--', label=f'Mean {legend_a}')
-    ax.axhline(y=mean(cycles_b), color="orange", linestyle='--', label=f'Mean {legend_b}')
-
-    if yrange is not None:
-        low, high = yrange
-        ax.set_ylim(low, high)
-
-    ax.set_xlabel('Word index')
-    ax.set_ylabel('Cycles')
-    ax.set_title(title)
-    ax.legend()
-
-    ax.set_xticks(range(1, len(cycles_a)+1, 3))
-    ax.grid(True)
 
 
 def print_list(l: List, title: str):
+    """
+    Print the elements of a list with a title and the total count.
+
+    :param l: The list to be printed.
+    :param title: The title to be displayed before printing the list.
+    """
 
     print(title)
     for el in l:
         print(f"- {el}")
 
     print(f"Tot: {len(l)}")
+
 

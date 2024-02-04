@@ -10,11 +10,53 @@ from enum import Enum
 from os import path
 from statistics import mean
 from typing import Dict, List, Tuple, Iterable
-import re
 
 from matplotlib import pyplot as plt
 
+from io_ import extract_zip_from_url, move_content_one_level_up
 from settings import DEFAULT_PARAMETER_PATH
+
+class DRCDownloader:
+
+    def __init__(self, path_: str, url: str):
+
+        self._path: str = path_
+        self._url: str = url
+
+    def __str__(self) -> str:
+        return f"DRCDownloader[path: {self.path}; url: {self.url}; {'' if self.is_downloaded else 'not'} downloaded]"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def is_downloaded(self):
+        return os.path.exists(self.path)
+
+    def download(self, overwrite: bool = False):
+
+        if not self.is_downloaded or overwrite:
+
+            # Create the target directory if it doesn't exist
+            os.makedirs(self.path, exist_ok=True)
+
+            # Call the function to extract the ZIP file
+            extract_zip_from_url(url=self.url, target_dir=self.path)
+
+            # Move content to power directory
+            move_content_one_level_up(base_path=self.path)
+
+            return
+
+        print(f"File already downloaded at {self.path}")
 
 class Named(Enum):
 
@@ -175,7 +217,7 @@ class DRCNetwork:
     def run(
         self, word: str, parameters: List[Tuple[Parameter, float | tuple]] | str | None = None,
         files: bool = False, store_activations: bool = False, log: bool = False
-    ) -> Result | Results | Tuple[Result, Activations] | Tuple[Results, Activations] | List[Result] :
+    ) -> Result | ResultSet | Results | Tuple[Result, Activations] | Tuple[ResultSet, Activations] | Tuple[Results, Activations]:
 
         # We need to change working directory to drc program
         # We save old one, and we reset it at the end of the process
@@ -278,17 +320,12 @@ class DRCNetwork:
                     result_lines = output_lines[result_line:]
                     result_lines = result_lines[:result_lines.index("")]
 
-                    result = [
+                    result = ResultSet(results=[
                         Result.parse_results_line(result_line=line) for line in result_lines
-                    ]
-
-                    result = {
-                        r.word: r for r in result
-                    }
+                    ])
 
                 # Multiple words
                 else:
-
                     result = Result.parse_results_line(result_line=output_lines[result_line])
 
                 # Different type of output depending on activation
@@ -372,6 +409,79 @@ class Result:
             named=Named(named)
         )
 
+class ResultSet:
+
+    def __init__(self, results: List[Result]):
+
+        self._result: Dict[str, Result] = {r.word: r for r in results}
+
+    def __str__(self) -> str:
+        return f"ResultSet[{len(self)} results]"
+
+    def __repr__(self):
+        return str(self)
+
+    def __len__(self) -> int:
+        return len(self._result)
+
+    def __iter__(self):
+        return iter(self._result.values())
+
+    def __getitem__(self, word: str) -> Result:
+        return self._result[word]
+
+    @property
+    def avg_cycle(self) -> int:
+        return int(mean([r.cycles for r in self]))
+
+    @staticmethod
+    def plot_cycles_comparison(results: List[ResultSet], legends: List[str],
+                               title: str = "Cycles comparison", yrange=None, ax=None):
+
+        COLS = ['blue', 'orange', 'green', 'purple']  # add more
+
+        if len(results) > len(COLS):
+            raise Exception(f"Result list exceeding maximum number {len(COLS)}")
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        lines = []
+
+        for result, col in zip(results, COLS[:(len(results))]):
+
+            for marker, named in [('o', Named.Correct), ('x', Named.Wrong)]:
+                i_cycle = [(i, r.cycles) for i, r in enumerate(result) if r.named == named]
+
+                line = ax.scatter(
+                    [i for i, _ in i_cycle],
+                    [cycle for _, cycle in i_cycle],
+                    marker=marker, color=col
+                )
+                lines.append(line)
+
+                ax.axhline(y=result.avg_cycle, color=col, linestyle='--')
+
+        if yrange is not None:
+            low, high = yrange
+            ax.set_ylim(low, high)
+
+        ax.set_xlabel('Word index')
+        ax.set_ylabel('Cycles')
+        ax.set_title(title)
+
+        max_range = max([len(r) for r in results])
+        ax.set_xticks(range(1, max_range + 1, 4))
+        ax.grid(True)
+
+        # Add legend for markers
+        for legend, color in zip(legends, COLS[:len(legends)]):
+            ax.scatter([], [], marker='o', color=color, label=legend)
+        ax.scatter([], [], marker='o', color='black', label=str(Named.Correct))
+        ax.scatter([], [], marker='x', color='black', label=str(Named.Wrong))
+        ax.plot([], linestyle='--', color='black', label='Average')
+        ax.legend(loc='upper left', prop={"size": 6})
+
 class Results:
 
     def __init__(self, results: Dict[float, Result], param: Parameter):
@@ -405,6 +515,9 @@ class Results:
         :return: number of results.
         """
         return len(self.results)
+
+    def __getitem__(self, value) -> Result:
+        return self.results[value]
 
     @property
     def results(self) -> Dict[float, Result]:
@@ -458,7 +571,8 @@ class Results:
 
         plt.legend(
             handles=custom_handles,
-            labels=custom_labels
+            labels=custom_labels,
+            prop={"size": 6}
         )
 
         # Plot
@@ -546,45 +660,36 @@ class Activations:
 
         return self._parse_file(activation_file=activation_file)
 
-    def plot(self, file_name: str, ax=None):
+    def plot(self, file_name: str, main: str | None = None,  ax=None):
 
         if ax is None:
             _, ax = plt.subplots()
+
+        if main is None:
+            main = file_name
 
         for a_name, a_value in self.get_data(file_name=file_name).items():
             ax.plot(range(len(a_value)), a_value, label=a_name)
 
-        ax.set_title(file_name)
-        ax.legend()
+        ax.set_title(main)
+        ax.legend(prop={"size": 6})
 
-    def plot_average(self, ax=None):
-
-        if ax is None:
-            _, ax = plt.subplots()
-
-        activations_all = [self.get_data(file_name=file) for file in self]
-
-        data = {
-            key: [mean(x) for x in zip(*[a[key] for a in activations_all])]
-            for key in ['TL', 'TGPC', 'TPh', 'TP', 'TGPCR']
-        }
-
-        for a_name, a_value in data.items():
-            ax.plot(range(len(a_value)), a_value, label=a_name)
-
-        ax.set_title(f"{path.basename(self.dir_)} - Average activations")
-        ax.legend()
-
-
-
-    def plot_multiple(self, nrows: int = 2):
+    def plot_multiple(self, nrows: int = 2, figsize: Tuple[int, int] = (15, 12), order: List[int] | None = None):
 
         ncols = math.ceil(len(self) / (nrows))
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=(15, 12))
-        files_iter = iter(self)
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+
+        if order is None:
+            files_iter = iter(self)
+
+        else:
+            files_iter = iter([self.file_names[i] for i in order])
 
         for i, j in itertools.product(range(nrows), range(ncols)):
 
-            file_name = next(files_iter)
-            self.plot(file_name=file_name, ax=axes[i][j])
+            try:
+                file_name = next(files_iter)
+                self.plot(file_name=file_name, ax=axes[i][j])
+            except StopIteration: # case less activations than grid cells
+                break

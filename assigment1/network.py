@@ -1,5 +1,5 @@
 """
-Filename: model.py
+Filename: pyDRC.py
 
 Description:
 This file contains the implementation of classes related to a meaning classification model.

@@ -1,5 +1,5 @@
 """
-model.py
+pyDRC.py
 
 Description:
 This module defines classes related to the core concepts of language classification experiments,

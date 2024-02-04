@@ -2,16 +2,18 @@ import platform
 from os import path
 from typing import Dict
 
+# Project root
 ROOT = path.abspath(path.join(__file__, ".."))
 
+# DRC url
 URLS: Dict[str, str] = {
     "Darwin":  "https://maxcoltheart.files.wordpress.com/2019/05/drc-mac.zip",
     'Windows': "https://maxcoltheart.files.wordpress.com/2019/05/drc-win.zip",
     'Linux':   "https://maxcoltheart.files.wordpress.com/2019/05/drc-linux-x86_64.zip"
 }
-
 URL = URLS[platform.system()]
 
+# Directories and files
 DRC_DIR_NAME = "drc"
 DRC_DIR = path.join(ROOT, DRC_DIR_NAME)
 
