@@ -1,3 +1,4 @@
 assignment1/data
 assignment2/drc
 *.idea
+*__pycache__
