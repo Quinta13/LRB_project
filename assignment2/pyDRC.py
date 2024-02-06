@@ -14,7 +14,8 @@ from typing import Dict, List, Tuple, Iterable
 from matplotlib import pyplot as plt
 
 from io_ import extract_zip_from_url, move_content_one_level_up
-from settings import DEFAULT_PARAMETER_PATH
+from settings import DEFAULT_PARAMETER_PATH, COLS
+
 
 # --- ENUM ---
 
@@ -306,7 +307,6 @@ class ResultSet:
         """
 
         # Colors for each ResultSet
-        COLS = ['blue', 'orange', 'green', 'purple']  # add more
 
         if len(results) > len(COLS):
             raise Exception(f"Result list exceeding maximum number {len(COLS)}")
@@ -354,6 +354,42 @@ class ResultSet:
         ax.plot([], linestyle='--', color='black', label='Average')
         ax.legend(loc='upper left', prop={"size": 6})
 
+    @staticmethod
+    def plot_cycles_boxplot(results: List[ResultSet], legends: List[str],
+                            title: str = "Cycles boxplot", ax=None, figsize: Tuple[int, int] = (9, 4)):
+        """
+        Plot a boxplot for cycles from different result sets.
+
+        :param results: List of ResultSet instances to compare.
+        :param legends: List of legends for each result set.
+        :param title: Title of the plot.
+        :param ax: Optional axes for the plot.
+        :param figsize: Option figure size for the plot.
+        """
+
+        # Colors for each ResultSet
+
+        if len(results) > len(COLS):
+            raise Exception(f"Result list exceeding maximum number {len(COLS)}")
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        all_data = [[r.cycles for r in result] for result in results]
+
+        # rectangular box plot
+        bplot = ax.boxplot(all_data,
+                            vert=True,
+                            patch_artist=True,
+                            labels=legends)
+        ax.set_title('Rectangular box plot')
+
+        for patch, color in zip(bplot['boxes'], COLS[:len(results)]):
+            patch.set_facecolor(color)
+
+        # Graph settings
+        ax.set_ylabel('Cycles')
+        ax.set_title(title)
 
 class Results:
     """
@@ -756,7 +792,10 @@ class DRCNetwork:
             # Find the index of the line containing "Results:"
             output_lines = output.split('\n')
 
-            result_line = output_lines.index("Results:") + 1
+            try:
+                result_line = output_lines.index("Results:") + 1
+            except ValueError:
+                raise Exception(f"Unable to parse Results:\n {output}")
 
             if not multiple_result:
 

@@ -22,3 +22,6 @@ BINARY_PATH = path.join(DRC_DIR, BINARY)
 
 DEFAULT_PARAMETER_FILE = "Languages/english-1.1.8.1/default.parameters"
 DEFAULT_PARAMETER_PATH = path.join(DRC_DIR, DEFAULT_PARAMETER_FILE)
+
+# Colors
+COLS = ['#5DADE2', '#F0B27A', '#A9DFBF', '#D2B4DE']
