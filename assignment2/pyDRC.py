@@ -12,6 +12,7 @@ from statistics import mean
 from typing import Dict, List, Tuple, Iterable
 
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 
 from io_ import extract_zip_from_url, move_content_one_level_up
 from settings import DEFAULT_PARAMETER_PATH, COLS
@@ -292,17 +293,59 @@ class ResultSet:
         """
 
         return int(mean([r.cycles for r in self]))
-
+    
     @staticmethod
     def plot_cycles_comparison(results: List[ResultSet], legends: List[str],
-                               title: str = "Cycles comparison", yrange=None, ax=None):
+                                title: str = "Cycles comparison",
+                                yrange=None, figsize: Tuple[int, int] = (9, 4)):
         """
-        Plot a comparison of cycles for different result sets.
+        Plot three types of cycles comparison for different result sets.
 
         :param results: List of ResultSet instances to compare.
         :param legends: List of legends for each result set.
         :param title: Title of the plot.
         :param yrange: Optional y-axis range.
+        :param figsize: Option figure size for the plot.
+        """
+        # fig, axes = plt.subplots(nrows=1, ncols=3, figsize=figsize)
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=figsize)
+
+        ResultSet.plot_cycles_scatterplot(
+            results=results,
+            legends=legends,
+            title=f"{title} - Scatterplot",
+            ax=axes[0],
+            yrange=yrange
+        )
+
+        #ResultSet.plot_cycles_boxplot(
+        #    results=results,
+        #    legends=legends,
+        #    title=f"{title} - Boxplot",
+        #    ax=axes[1]
+        #)
+
+        ResultSet.plot_cycles_violinplot(
+            results=results,
+            legends=legends,
+            title=f"{title} - Violinplot",
+            ax=axes[1]
+        )
+        
+        
+
+    @staticmethod
+    def plot_cycles_scatterplot(results: List[ResultSet], legends: List[str],
+                                title: str = "", figsize: Tuple[int, int] = (9, 4),
+                                ax: Axes = None, yrange=None):
+        """
+        Plot a scatterplot of cycles for different result sets.
+
+        :param results: List of ResultSet instances to compare.
+        :param legends: List of legends for each result set.
+        :param title: Title of the plot.
+        :param yrange: Optional y-axis range.
+        :param figsize: Option figure size for the plot.
         :param ax: Optional axes for the plot.
         """
 
@@ -312,7 +355,7 @@ class ResultSet:
             raise Exception(f"Result list exceeding maximum number {len(COLS)}")
 
         if ax is None:
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=figsize)
 
         lines = []
 
@@ -356,7 +399,8 @@ class ResultSet:
 
     @staticmethod
     def plot_cycles_boxplot(results: List[ResultSet], legends: List[str],
-                            title: str = "Cycles boxplot", ax=None, figsize: Tuple[int, int] = (9, 4)):
+                            title: str = "Cycles boxplot", ax: Axes = None,
+                            figsize: Tuple[int, int] = (9, 4)):
         """
         Plot a boxplot for cycles from different result sets.
 
@@ -373,15 +417,15 @@ class ResultSet:
             raise Exception(f"Result list exceeding maximum number {len(COLS)}")
 
         if ax is None:
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=figsize)
 
         all_data = [[r.cycles for r in result] for result in results]
 
         # rectangular box plot
         bplot = ax.boxplot(all_data,
-                            vert=True,
-                            patch_artist=True,
-                            labels=legends)
+                           vert=True,
+                           patch_artist=True,
+                           labels=legends)
         ax.set_title('Rectangular box plot')
 
         for patch, color in zip(bplot['boxes'], COLS[:len(results)]):
@@ -390,6 +434,48 @@ class ResultSet:
         # Graph settings
         ax.set_ylabel('Cycles')
         ax.set_title(title)
+
+    @staticmethod
+    def plot_cycles_violinplot(results: List[ResultSet], legends: List[str],
+                               title: str = "Cycles violinplot", ax: Axes = None,
+                               figsize: Tuple[int, int] = (9, 4)) -> None:
+        """
+        Plot a violin plot for cycles from different result sets.
+
+        :param results: List of ResultSet instances to compare.
+        :param legends: List of legends for each result set.
+        :param title: Title of the plot.
+        :param ax: Optional axes for the plot.
+        :param figsize: Option figure size for the plot.
+        """
+
+        if len(results) > len(COLS):
+            raise Exception(f"Result list exceeding maximum number {len(COLS)}")
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+
+        all_data = [[r.cycles for r in result] for result in results]
+
+        # Violin plot
+        violin_parts = ax.violinplot(all_data, showmedians=True)
+
+        # Set colors for each violin
+        for partname in ('cbars', 'cmins', 'cmaxes'):
+            vp = violin_parts[partname]
+            vp.set_edgecolor('k')
+
+        for pc, color in zip(violin_parts['bodies'], COLS[:len(results)]):
+            pc.set_facecolor(color)
+
+        # Set names on x-axis
+        ax.set_xticks(range(1, len(legends) + 1))
+        ax.set_xticklabels(legends, rotation='vertical', fontsize=7)
+
+        # Graph settings
+        ax.set_ylabel('Cycles')
+        ax.set_title(title)
+
 
 class Results:
     """
@@ -989,7 +1075,7 @@ class Activations:
 
         return self._parse_file(activation_file=activation_file)
 
-    def plot(self, file_name: str, main: str | None = None,  ax=None):
+    def plot(self, file_name: str, main: str | None = None,  ax: Axes = None):
         """
         Plot activation data from a specific file.
 
