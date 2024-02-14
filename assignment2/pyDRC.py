@@ -395,7 +395,7 @@ class ResultSet:
         ax.scatter([], [], marker='o', color='black', label=str(Named.Correct))
         ax.scatter([], [], marker='x', color='black', label=str(Named.Wrong))
         ax.plot([], linestyle='--', color='black', label='Average')
-        ax.legend(loc='upper left', prop={"size": 6})
+        ax.legend(loc='best', prop={"size": 6})
 
     @staticmethod
     def plot_cycles_boxplot(results: List[ResultSet], legends: List[str],
@@ -607,6 +607,7 @@ class Results:
         custom_labels = list(legend_dict.values())
 
         plt.legend(
+            loc="best",
             handles=custom_handles,
             labels=custom_labels,
             prop={"size": 6}
@@ -1094,7 +1095,7 @@ class Activations:
             ax.plot(range(len(a_value)), a_value, label=a_name)
 
         ax.set_title(main)
-        ax.legend(prop={"size": 6})
+        ax.legend(loc="best", prop={"size": 6})
 
     def plot_multiple(self, nrows: int = 2, figsize: Tuple[int, int] = (15, 12), order: List[int] | None = None):
         """
